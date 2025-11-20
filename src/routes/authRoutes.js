@@ -51,17 +51,8 @@ router.get('/me', protect, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'Không tìm thấy người dùng' });
     }
-    // Trả full user với role/cart
-    res.status(200).json({ user: {
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      fullName: user.fullName,
-      role: user.role,
-      cart: user.cart || [],
-      avatar: user.avatar,
-      // ... other fields nếu cần
-    } });
+    // FIX: Trả full user object (không subset - include createdAt, phone, gender, address, dateOfBirth, etc.)
+    res.status(200).json({ user });
   } catch (error) {
     console.error('Error fetching current user:', error);
     res.status(500).json({ message: 'Lỗi server', error: error.message });

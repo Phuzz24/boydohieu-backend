@@ -1,5 +1,6 @@
 // src/controllers/authController.js
 const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const path = require('path');
@@ -253,27 +254,33 @@ const resetPassword = async (req, res, next) => {
 };
 
 // Đổi mật khẩu (giữ nguyên)
-const changePassword = async (req, res, next) => {
-  const schema = Joi.object({
-    currentPassword: Joi.string().required(),
-    newPassword: Joi.string().min(6).required(),
-  });
-
-  const { error } = schema.validate(req.body);
-  if (error) return res.status(400).json({ message: error.details[0].message });
-
+// ĐỔI MẬT KHẨU – PHIÊN BẢN CHUẨN NHẤT (KHÔNG HASH TAY!!!)
+const changePassword = async (req, res) => {
   try {
+    const { currentPassword, newPassword } = req.body;
     const user = await User.findById(req.user.id);
-    if (!user || !(await user.matchPassword(req.body.currentPassword))) {
-      return res.status(401).json({ message: 'Mật khẩu hiện tại không đúng' });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Không tìm thấy người dùng' });
     }
 
-    user.password = req.body.newPassword;
-    await user.save();
+    // Kiểm tra mật khẩu cũ (dùng method của model → đúng)
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng!' });
+    }
 
-    res.json({ message: 'Đổi mật khẩu thành công' });
-  } catch (err) {
-    next(err);
+    // QUAN TRỌNG NHẤT: GÁN PLAINTEXT → ĐỂ pre('save') TỰ HASH!!!
+    user.password = newPassword;  // ← CHỈ GÁN THÔI, KHÔNG HASH TAY!!!
+    
+    await user.save(); // ← pre('save') sẽ tự động hash ngon lành!
+
+    res.json({ 
+      message: 'Đổi mật khẩu thành công! Vui lòng đăng nhập lại.' 
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Lỗi server' });
   }
 };
 

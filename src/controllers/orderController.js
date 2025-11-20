@@ -2,6 +2,7 @@ const Order = require('../models/Order');
 const mongoose = require('mongoose');
 const { io } = require('../app');
 const adminNotificationsController = require('./adminNotificationsController');
+const { createNotification } = require('./notificationController');  // Import createNotification for user
 
 const createOrder = async (req, res) => {
   try {
@@ -51,13 +52,35 @@ const createOrder = async (req, res) => {
       console.error('Socket emit error:', socketError);
     }
 
-    // Send notification
+    // Send admin notification
     await adminNotificationsController.createNotification({
       title: 'Đơn hàng mới',
       message: `Khách hàng ${fullName} đặt đơn hàng #${order.orderCode} trị giá ${total.toLocaleString()}₫`,
       type: 'order',
       relatedId: order._id
     });
+
+    // NEW: Create user notification for order confirmation
+    await createNotification({
+      title: 'Đơn hàng mới được tạo',
+      message: `Cảm ơn bạn! Đơn hàng #${order.orderCode} trị giá ${total.toLocaleString()}₫ đã được đặt thành công. Chúng tôi sẽ xử lý sớm.`,
+      type: 'order',
+      relatedId: order._id,
+      userId: req.user.id  // Specific to this user
+    });
+
+    // NEW: Emit realtime to user's room
+    if (io) {
+      io.to(`user_${req.user.id}`).emit('newNotification', {
+        _id: new mongoose.Types.ObjectId(),  // Fake ID for realtime
+        title: 'Đơn hàng mới được tạo',
+        message: `Đơn hàng #${order.orderCode} đã được đặt thành công.`,
+        type: 'order',
+        relatedId: order._id,
+        read: false,
+        createdAt: new Date()
+      });
+    }
 
     res.status(201).json({ message: 'Đặt hàng thành công', order });
   } catch (error) {
